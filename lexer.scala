@@ -13,6 +13,7 @@ case class CHAR(c: Char) extends Rexp
 case class ALT(r1: Rexp, r2: Rexp) extends Rexp 
 case class SEQ(r1: Rexp, r2: Rexp) extends Rexp 
 case class STAR(r: Rexp) extends Rexp 
+case class PLUS(r: Rexp) extends Rexp
 case class RECD(x: String, r: Rexp) extends Rexp
   
 // values  
@@ -46,7 +47,6 @@ implicit def stringOps(s: String) = new {
   def % = STAR(s)
   def ~ (r: Rexp) = SEQ(s, r)
   def ~ (r: String) = SEQ(s, r)
-  def $ (r: Rexp) = RECD(s, r)
 }
 
 def nullable(r: Rexp) : Boolean = r match {
