@@ -60,6 +60,7 @@ implicit def string_ops_to_regex(s: String) = new {
   def $ (r: Rexp)   = RECD(s, r)
 }
 
+/* Returns true if Regex matches empty string */
 def nullable(r: Rexp) : Boolean = r match {
   case ZERO         => false
   case ONE          => true
@@ -74,6 +75,7 @@ def nullable(r: Rexp) : Boolean = r match {
   case RECD(_, r1)  => nullable(r1)
 }
 
+/* Derivative of regular expression r wrt char c */
 def der(c: Char, r: Rexp) : Rexp = r match {
   case ZERO         => ZERO
   case ONE          => ZERO
@@ -91,7 +93,7 @@ def der(c: Char, r: Rexp) : Rexp = r match {
   case RECD(_, r1)  => der(c, r1)
 }
 
-// extracts a string from value
+/* Extracts string from value */
 def flatten(v: Val) : String = v match {
   case Empty        => ""
   case Chr(c)       => c.toString
@@ -102,8 +104,7 @@ def flatten(v: Val) : String = v match {
   case Rec(_, v)    => flatten(v)
 }
 
-// extracts an environment from a value;
-// used for tokenise a string
+/* Extracts environment from value */
 def env(v: Val) : List[(String, String)] = v match {
   case Empty        => Nil
   case Chr(c)       => Nil
@@ -114,7 +115,7 @@ def env(v: Val) : List[(String, String)] = v match {
   case Rec(x, v)    => (x, flatten(v))::env(v)
 }
 
-// The Injection Part of the lexer
+/* How did the regular expression match the empty string */
 def mkeps(r: Rexp) : Val = r match {
   case ONE          => Empty
   case ALT(r1, r2)  => 
@@ -128,6 +129,7 @@ def mkeps(r: Rexp) : Val = r match {
   case RECD(x, r)   => Rec(x, mkeps(r))
 }
 
+/* Inject char c back into val */
 def inj(r: Rexp, c: Char, v: Val) : Val = (r, v) match {
   case (STAR(r), Sequ(v1, Stars(vs)))     => Stars(inj(r, c, v1)::vs)
   case (PLUS(r), Sequ(v1, Stars(vs)))     => Stars(inj(r, c, v1)::vs)
@@ -140,8 +142,6 @@ def inj(r: Rexp, c: Char, v: Val) : Val = (r, v) match {
   case (CHAR(d), Empty)                   => Chr(c) 
   case (RANGE(s), Empty)                  => Chr(c)
   case (OPTIONAL(r), Right(v))            => Right(inj(r, c, v))
-
-  // case (NTIMES(r, i), Sequ(v1, Stars(v2)))=> Stars()
   case (RECD(x, r1), _)                   => Rec(x, inj(r1, c, v))
 }
 
@@ -202,25 +202,18 @@ def simp(r: Rexp): (Rexp, Val => Val) = r match {
 }
 
 
-/* */
+/* Lexer with simplification */
 def lex_simp(r: Rexp, s: List[Char]) : Val = s match {
-
   case Nil => if (nullable(r)) mkeps(r) else throw new Exception("lexing error") 
   case c::cs => {
     val (r_simp, f_simp) = simp(der(c, r))
     inj(r, c, f_simp(lex_simp(r_simp, cs)))
   }
-
 }
 
 def lexing_simp(r: Rexp, s: String) = 
   env(lex_simp(r, s.toList))
 
-
-// The Lexing Rules for the Fun Language
-
-// def PLUS(r: Rexp) = r ~ r.%
-// def OPTIONAL(r: Rexp) = ONE | r
 
             val SYM         = RANGE(('a' to 'z').toSet ++ ('A' to 'Z').toSet ++ Set('_'))
             val DIGIT       = RANGE(('0' to '9').toSet)
@@ -239,43 +232,18 @@ def lexing_simp(r: Rexp, s: String) =
             val OPT         = PLUS(SEQ(PLUS("@@"), OPTIONAL("::")))
             val NT          = NTIMES((":"), 5)
 
+/* Define syntax of language WHILE */
+val WHILE_REGS = (("Keyword" $ KEYWORD) | 
+                  ("Identifier" $ ID) | 
+                  ("Operator" $ OP) | 
+                  ("No Leading Zero Number" $ NLZEROES) |
+                  ("Number" $ NUM) | 
+                  ("Semicolon" $ SEMI) | 
+                  ("String" $ STRING) |
+                  ("Paren" $ (OCPAREN | CCPAREN | OPAREN | CPAREN)) | 
+                  ("Whitespace" $ WHITESPACE)).% 
 
-
-val WHILE_REGS = (("k" $ KEYWORD) | 
-                  ("i" $ ID) | 
-                  ("o" $ OP) | 
-                  ("nl" $ NLZEROES) |
-                  ("n" $ NUM) | 
-                  ("s" $ SEMI) | 
-                  ("str" $ STRING) |
-                  ("p" $ (OCPAREN | CCPAREN | OPAREN | CPAREN)) | 
-                  ("w" $ WHITESPACE) |
-                  ("OPT" $ OPT) |
-                  ("NT" $ NT)).% 
-
-
-// Two Simple While Tests
-//========================
-val progA = 
-"""@@@@@@::@@ :::::"""
-println(lexing_simp(WHILE_REGS, progA))
-
-println("test: read n")
-
-val prog0 = """read n"""
-println(lexing_simp(WHILE_REGS, prog0))
-
-println("test: read  n; write n ")
-
-val prog1 = """read  n; write n"""
-println(lexing_simp(WHILE_REGS, prog1))
-
-
-
-// Bigger Tests
-//==============
-
-// escapes strings and prints them out as "", "\n" and so on
+// Copied from sample code
 def esc(raw: String): String = {
   import scala.reflect.runtime.universe._
   Literal(Constant(raw)).toString
@@ -284,12 +252,16 @@ def esc(raw: String): String = {
 def escape(tks: List[(String, String)]) =
   tks.map{ case (s1, s2) => (s1, esc(s2))}
 
-val prog2 = """
+/* Q2 */  val prog_A = """read n"""
+          println(lexing_simp(WHILE_REGS, prog_A))
+
+/* Q3 */
+val prog_B = 
+"""
 write "Fib";
 read n;
 minus1 := 0;
 minus2 := 1;
-johntest := 001
 while n > 0 do {
   temp := minus2;
   minus2 := minus1 + minus2;
@@ -298,15 +270,12 @@ while n > 0 do {
 };
 write "Result";
 write minus2
-for (x)
 """
-
-println("lexing Fib")
-println(escape(lexing_simp(WHILE_REGS, prog2)).mkString("\n"))
+println(escape(lexing_simp(WHILE_REGS, prog_B)).mkString("\n"))
 
 
-
-val prog3 = """
+/* Q3 */
+val prog_C = """
 start := 1000;
 x := start;
 y := start;
@@ -323,12 +292,11 @@ while 0 < x do {
  x := x - 1
 }
 """
+println(escape(lexing_simp(WHILE_REGS, prog_C)).mkString("\n"))
 
-println("lexing Loops")
-println(escape(lexing_simp(WHILE_REGS, prog3)).mkString("\n"))
-
-
-val prog4 = """
+/* Q3 */
+val prog_D = 
+"""
 write "Input n please";
 read n;
 write "The factors of n are";
@@ -341,6 +309,5 @@ while n != 1 do {
   f := f + 1
 }
 """
-println("lexing factors")
-println(escape(lexing_simp(WHILE_REGS, prog4)).mkString("\n"))
+println(escape(lexing_simp(WHILE_REGS, prog_D)).mkString("\n"))
 
