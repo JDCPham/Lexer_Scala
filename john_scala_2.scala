@@ -86,7 +86,7 @@ def der(c: Char, r: Rexp) : Rexp = r match {
   case STAR(r)      => SEQ(der(c, r), STAR(r))
   case RANGE(s)     => if (s.contains(c)) ONE else ZERO
   case PLUS(r)      => SEQ(der(c, r), STAR(r)) 
-  case OPTIONAL(r)  => ALT(ONE, der(c, r)) 
+  case OPTIONAL(r)  => ALT(ZERO, der(c, r)) 
   case NTIMES(r, i) => if (i == 0) ZERO else SEQ(der(c, r), NTIMES(r, i - 1)) 
   case RECD(_, r1)  => der(c, r1)
 }
@@ -122,15 +122,16 @@ def mkeps(r: Rexp) : Val = r match {
 
   case SEQ(r1, r2)  => Sequ(mkeps(r1), mkeps(r2))
   case STAR(r)      => Stars(Nil)
-  case PLUS(r)      => mkeps(r)
+  case PLUS(r)      => Stars(List(mkeps(r)))
   case OPTIONAL(r)  => Empty
-  case NTIMES(r, i) => if (i == 0) Empty else mkeps(r)
+  case NTIMES(r, i) => Stars(List.fill(i)(mkeps(r)))
   case RECD(x, r)   => Rec(x, mkeps(r))
 }
 
 def inj(r: Rexp, c: Char, v: Val) : Val = (r, v) match {
   case (STAR(r), Sequ(v1, Stars(vs)))     => Stars(inj(r, c, v1)::vs)
   case (PLUS(r), Sequ(v1, Stars(vs)))     => Stars(inj(r, c, v1)::vs)
+  case (NTIMES(r, i), Sequ(v1, Stars(vs))) => Stars(inj(r, c, v1)::vs)
   case (SEQ(r1, r2), Sequ(v1, v2))        => Sequ(inj(r1, c, v1), v2)
   case (SEQ(r1, r2), Left(Sequ(v1, v2)))  => Sequ(inj(r1, c, v1), v2)
   case (SEQ(r1, r2), Right(v2))           => Sequ(mkeps(r1), inj(r2, c, v2))
@@ -138,8 +139,9 @@ def inj(r: Rexp, c: Char, v: Val) : Val = (r, v) match {
   case (ALT(r1, r2), Right(v2))           => Right(inj(r2, c, v2))
   case (CHAR(d), Empty)                   => Chr(c) 
   case (RANGE(s), Empty)                  => Chr(c)
-  case (OPTIONAL(r), Left(v1))            => Left(Chr(c))
-  case (OPTIONAL(r), Right(v2))           => Right(inj(r, c, v)) 
+  case (OPTIONAL(r), Right(v))            => Right(inj(r, c, v))
+
+  // case (NTIMES(r, i), Sequ(v1, Stars(v2)))=> Stars()
   case (RECD(x, r1), _)                   => Rec(x, inj(r1, c, v))
 }
 
@@ -234,8 +236,8 @@ def lexing_simp(r: Rexp, s: String) =
 /* Q1.7 */  val ID          = SYM ~ (SYM | DIGIT).% 
 /* Q1.8 */  val NLZEROES    = ("0") | ((RANGE(('1' to '9').toSet) ~ (DIGIT.%))) // NLZEROES = No Leading Zeroes
             val NUM         = PLUS(DIGIT)
-            val OPT         = PLUS(SEQ(CHAR('@'), OPTIONAL("!")))
-            val NT          = NTIMES((":"), 2)
+            val OPT         = PLUS(SEQ(PLUS("@@"), OPTIONAL("::")))
+            val NT          = NTIMES((":"), 5)
 
 
 
@@ -254,11 +256,8 @@ val WHILE_REGS = (("k" $ KEYWORD) |
 
 // Two Simple While Tests
 //========================
-
-val progA =
-"""
-@!@! 0 01 if 
-"""
+val progA = 
+"""@@@@@@::@@ :::::"""
 println(lexing_simp(WHILE_REGS, progA))
 
 println("test: read n")
